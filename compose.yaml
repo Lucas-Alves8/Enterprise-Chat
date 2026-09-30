@@ -1,0 +1,59 @@
+services:
+  # 1. Banco de Dados com Suporte a Vetores
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-rag
+    environment:
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # 2. Servidor de Autenticação Keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.0
+    container_name: keycloak_chat
+    command: [ "start-dev", "--import-realm" ]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    volumes:
+      # Importa automaticamente o arquivo JSON de backup na subida
+      - ../keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    depends_on:
+      - postgres
+      - openldap
+
+  # 3. Servidor OpenLDAP (Simula o Active Directory)
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap-server
+    environment:
+      LDAP_ORGANISATION: "Sua Empresa"
+      LDAP_DOMAIN: "minhaempresa.com"
+      LDAP_ADMIN_PASSWORD: "adminpassword"
+      LDAP_TLS: "false"
+    ports:
+      - "389:389"
+      - "636:636"
+
+  # 4. Interface Web do LDAP
+  phpldapadmin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: phpldapadmin-ui
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "openldap"
+      PHPLDAPADMIN_HTTPS: "false"
+      PHPLDAPADMIN_SERVER_ADMIN_BIND_DN: "cn=admin,dc=minhaempresa,dc=com"
+    ports:
+      - "6443:80"
+    depends_on:
+      - openldap
+
+volumes:
+  pgdata:
